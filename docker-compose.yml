@@ -1,0 +1,39 @@
+version: "3.9"
+services:
+  app:
+    build: ./app
+    container_name: auranova-app
+    environment:
+      - PORT=3000
+      - SENTRY_DSN=${SENTRY_DSN}
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: auranova-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - GENERIC_TIMEZONE=America/Panama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5678/json"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  chromium-pdf:
+    image: ghcr.io/puppeteer/puppeteer:latest
+    container_name: auranova-chromium
+    command: tail -f /dev/null
+
+  ffmpeg-worker:
+    image: jrottenberg/ffmpeg:6.0-ubuntu
+    container_name: auranova-ffmpeg
+    command: ["bash","-lc","sleep infinity"]

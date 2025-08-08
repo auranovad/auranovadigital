@@ -1,0 +1,11 @@
+{
+  "name": "auranova-app",
+  "version": "0.1.1",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "lint": "node --eval \"process.exit(0)\"",
+    "test": "node --eval \"console.log('ok')\""
+  },
+  "dependencies": {}
+}

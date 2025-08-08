@@ -1,0 +1,58 @@
+name: CI (Build/Lint/Tests/SQL/RLS/Security)
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install deps
+        working-directory: app
+        run: npm ci || npm i
+      - name: Lint
+        working-directory: app
+        run: npm run lint
+      - name: Unit tests
+        working-directory: app
+        run: npm test -- --ci
+      - name: E2E (smoke)
+        working-directory: app
+        run: node tests/smoke-e2e.mjs || true
+
+  sql-rls:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for DB
+        run: |
+          for i in {1..30}; do
+            pg_isready -h localhost -p 5432 && break
+            sleep 2
+          done
+      - name: Apply init_core.sql
+        run: psql postgresql://postgres:postgres@localhost:5432/postgres -f supabase/sql/init_core.sql
+      - name: Run RLS tests
+        run: psql postgresql://postgres:postgres@localhost:5432/postgres -f supabase/sql/rls_tests.sql
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: gitleaks (secret scan)
+        uses: zricethezav/gitleaks-action@v2

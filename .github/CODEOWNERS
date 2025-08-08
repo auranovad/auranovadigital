@@ -1,0 +1,4 @@
+/supabase/sql/* @auranova/tech-lead
+/app/* @auranova/tech-lead @auranova/lovable
+/.github/* @auranova/tech-lead
+/docker-compose.yml @auranova/tech-lead

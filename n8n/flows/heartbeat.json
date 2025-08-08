@@ -1,0 +1,21 @@
+{
+  "name": "heartbeat",
+  "nodes": [
+    {
+      "id": "cron1",
+      "type": "cron",
+      "params": {
+        "interval": 60
+      }
+    },
+    {
+      "id": "noop1",
+      "type": "noop"
+    }
+  ],
+  "connections": {
+    "cron1": [
+      "noop1"
+    ]
+  }
+}
