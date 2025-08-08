@@ -131,20 +131,126 @@ alter table crm.leads enable row level security;
 alter table core.dlq enable row level security;
 alter table core.agent_runs enable row level security;
 
-create policy p_tenants_sel on core.tenants for select using (core.is_member_of(id));
-create policy p_tenants_upd on core.tenants for update using (core.is_member_of(id)) with check (core.is_member_of(id));
-create policy p_memberships_sel on core.memberships for select using (core.is_member_of(tenant_id));
-create policy p_memberships_ins on core.memberships for insert with check (core.is_member_of(tenant_id));
-create policy p_audit_sel on core.audit_logs for select using (core.is_member_of(tenant_id));
-create policy p_flags_sel on core.tenant_flags for select using (core.is_member_of(tenant_id));
-create policy p_oauth_sel on sec.oauth_tokens for select using (core.is_member_of(tenant_id));
-create policy p_policies_sel on sec.policies for select using (core.is_member_of(tenant_id));
-create policy p_events_sel on sec.events for select using (core.is_member_of(tenant_id));
-create policy p_omni_sel on omni.messages for select using (core.is_member_of(tenant_id));
-create policy p_sch_sel on sch.events for select using (core.is_member_of(tenant_id));
-create policy p_crm_sel on crm.leads for select using (core.is_member_of(tenant_id));
-create policy p_dlq_sel on core.dlq for select using (core.is_member_of(tenant_id));
-create policy p_agent_runs_sel on core.agent_runs for select using (core.is_member_of(tenant_id));
+-- RLS policies (idempotentes)
+-- Ten cuidado con el orden: primero tablas, luego políticas
+-- TENANTS
+drop policy if exists p_tenants_sel on core.tenants;
+create policy p_tenants_sel on core.tenants for select
+  using (core.is_member_of(id));
+
+drop policy if exists p_tenants_upd on core.tenants;
+create policy p_tenants_upd on core.tenants for update
+  using (core.is_member_of(id))
+  with check (core.is_member_of(id));
+
+-- MEMBERSHIPS
+drop policy if exists p_memberships_sel on core.memberships;
+create policy p_memberships_sel on core.memberships for select
+  using (core.is_member_of(tenant_id));
+
+drop policy if exists p_memberships_ins on core.memberships;
+create policy p_memberships_ins on core.memberships for insert
+  with check (core.is_member_of(tenant_id));
+
+drop policy if exists p_memberships_upd on core.memberships;
+create policy p_memberships_upd on core.memberships for update
+  using (core.is_member_of(tenant_id))
+  with check (core.is_member_of(tenant_id));
+
+drop policy if exists p_memberships_del on core.memberships;
+create policy p_memberships_del on core.memberships for delete
+  using (core.is_member_of(tenant_id));
+
+-- AUDIT
+drop policy if exists p_audit_sel on core.audit_logs;
+create policy p_audit_sel on core.audit_logs for select
+  using (core.is_member_of(tenant_id));
+
+-- FLAGS
+drop policy if exists p_flags_sel on core.tenant_flags;
+create policy p_flags_sel on core.tenant_flags for select
+  using (core.is_member_of(tenant_id));
+
+drop policy if exists p_flags_ins on core.tenant_flags;
+create policy p_flags_ins on core.tenant_flags for insert
+  with check (core.is_member_of(tenant_id));
+
+drop policy if exists p_flags_upd on core.tenant_flags;
+create policy p_flags_upd on core.tenant_flags for update
+  using (core.is_member_of(tenant_id))
+  with check (core.is_member_of(tenant_id));
+
+drop policy if exists p_flags_del on core.tenant_flags;
+create policy p_flags_del on core.tenant_flags for delete
+  using (core.is_member_of(tenant_id));
+
+-- SECURITY
+drop policy if exists p_oauth_sel on sec.oauth_tokens;
+create policy p_oauth_sel on sec.oauth_tokens for select
+  using (core.is_member_of(tenant_id));
+
+drop policy if exists p_policies_sel on sec.policies;
+create policy p_policies_sel on sec.policies for select
+  using (core.is_member_of(tenant_id));
+
+drop policy if exists p_events_sel on sec.events;
+create policy p_events_sel on sec.events for select
+  using (core.is_member_of(tenant_id));
+
+-- OMNI
+drop policy if exists p_omni_sel on omni.messages;
+create policy p_omni_sel on omni.messages for select
+  using (core.is_member_of(tenant_id));
+drop policy if exists p_omni_ins on omni.messages;
+create policy p_omni_ins on omni.messages for insert
+  with check (core.is_member_of(tenant_id));
+drop policy if exists p_omni_upd on omni.messages;
+create policy p_omni_upd on omni.messages for update
+  using (core.is_member_of(tenant_id))
+  with check (core.is_member_of(tenant_id));
+drop policy if exists p_omni_del on omni.messages;
+create policy p_omni_del on omni.messages for delete
+  using (core.is_member_of(tenant_id));
+
+-- SCHEDULING
+drop policy if exists p_sch_sel on sch.events;
+create policy p_sch_sel on sch.events for select
+  using (core.is_member_of(tenant_id));
+drop policy if exists p_sch_ins on sch.events;
+create policy p_sch_ins on sch.events for insert
+  with check (core.is_member_of(tenant_id));
+drop policy if exists p_sch_upd on sch.events;
+create policy p_sch_upd on sch.events for update
+  using (core.is_member_of(tenant_id))
+  with check (core.is_member_of(tenant_id));
+drop policy if exists p_sch_del on sch.events;
+create policy p_sch_del on sch.events for delete
+  using (core.is_member_of(tenant_id));
+
+-- CRM
+drop policy if exists p_crm_sel on crm.leads;
+create policy p_crm_sel on crm.leads for select
+  using (core.is_member_of(tenant_id));
+drop policy if exists p_crm_ins on crm.leads;
+create policy p_crm_ins on crm.leads for insert
+  with check (core.is_member_of(tenant_id));
+drop policy if exists p_crm_upd on crm.leads;
+create policy p_crm_upd on crm.leads for update
+  using (core.is_member_of(tenant_id))
+  with check (core.is_member_of(tenant_id));
+drop policy if exists p_crm_del on crm.leads;
+create policy p_crm_del on crm.leads for delete
+  using (core.is_member_of(tenant_id));
+
+-- DLQ & AGENT RUNS
+drop policy if exists p_dlq_sel on core.dlq;
+create policy p_dlq_sel on core.dlq for select
+  using (core.is_member_of(tenant_id));
+
+drop policy if exists p_agent_runs_sel on core.agent_runs;
+create policy p_agent_runs_sel on core.agent_runs for select
+  using (core.is_member_of(tenant_id));
+
 
 grant usage on schema core, sec, omni, sch, crm, cmp, media, rpt to authenticated, anon;
 grant select, insert, update, delete on all tables in schema core, sec, omni, sch, crm to authenticated;
