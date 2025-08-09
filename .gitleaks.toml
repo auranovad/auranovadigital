@@ -1,0 +1,14 @@
+title = "Auranova Gitleaks Config"
+
+[allowlist]
+description = "Allow sample envs and test data (no real secrets)"
+files = [
+  '''^env\.example$''',
+  '''^app/.+\.test\.(js|ts|tsx)$''',
+  '''^app/tests/.*''',
+  '''^supabase/sql/tests/.*'''
+]
+regexes = [
+  '''change_me_long_random''',
+  '''localhost:5678'''
+]
