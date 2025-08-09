@@ -28,4 +28,24 @@ jobs:
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          psql "$SUPABASE_DB_URL" -c "select table_schema, table_name, row_security_active from information_schema.tables where table_schema in ('core','sec','omni','sch','crm');"
+          set -euo pipefail
+          # Cuenta cuántas tablas en nuestros schemas tienen RLS habilitado
+          SQL="select count(*)
+               from pg_class c
+               join pg_namespace n on n.oid = c.relnamespace
+               where c.relkind = 'r'
+                 and n.nspname in ('core','sec','omni','sch','crm')
+                 and c.relrowsecurity = true;"
+          CNT=$(psql "$SUPABASE_DB_URL" -t -A -c "$SQL")
+          echo "Tables with RLS enabled: $CNT"
+          if [ "$CNT" -eq 0 ]; then
+            echo "ERROR: No tables with RLS enabled in target schemas." >&2
+            # Dump de ayuda para diagnosticar
+            psql "$SUPABASE_DB_URL" -c "
+              select n.nspname as schema, c.relname as table, c.relrowsecurity as rls_enabled
+              from pg_class c
+              join pg_namespace n on n.oid = c.relnamespace
+              where c.relkind='r' and n.nspname in ('core','sec','omni','sch','crm')
+              order by 1,2;"
+            exit 1
+          fi
