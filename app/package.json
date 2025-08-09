@@ -1,11 +1,26 @@
 {
-  "name": "auranova-app",
-  "version": "0.1.1",
+  "name": "auranova-web",
+  "version": "0.2.0",
+  "private": true,
   "type": "module",
   "scripts": {
-    "start": "node index.js",
-    "lint": "node --eval \"process.exit(0)\"",
-    "test": "node --eval \"console.log('ok')\""
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "start": "npx serve -s dist -l 3000",
+    "lint": "echo \"(lint placeholder)\"",
+    "test": "node -e \"console.log('ok')\""
   },
-  "dependencies": {}
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "serve": "^14.2.1",
+    "typescript": "^5.5.4",
+    "vite": "^5.3.5"
+  }
 }
