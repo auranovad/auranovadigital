@@ -37,7 +37,7 @@ jobs:
         image: postgres:15
         env:
           POSTGRES_PASSWORD: postgres
-        ports: ['5432:5432']
+        ports: ["5432:5432"]
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -66,9 +66,11 @@ jobs:
         with:
           fetch-depth: 0
       - name: gitleaks (secret scan)
-        uses: zricethezav/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          config-path: .gitleaks.toml
-          args: --no-git --redact -v
+          config_path: .gitleaks.toml
+          redact: true
+          verbose: true
+
