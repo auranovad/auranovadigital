@@ -25,7 +25,7 @@ jobs:
         run: npm run lint
       - name: Unit tests
         working-directory: app
-        run: npm test -- --ci
+        run: npm test
       - name: E2E (smoke)
         working-directory: app
         run: node tests/smoke-e2e.mjs || true
