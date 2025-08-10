@@ -53,17 +53,23 @@ jobs:
         run: psql postgresql://postgres:postgres@localhost:5432/postgres -f supabase/sql/tests/rls_tests.sql
 
   security:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: gitleaks (secret scan)
-        uses: gitleaks/gitleaks-action@v2
-        with:
+  runs-on: ubuntu-latest
+  permissions:
+    contents: read
+    pull-requests: read
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: gitleaks (secret scan)
+      uses: zricethezav/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # token automático del job
+      with:
+        config-path: .gitleaks.toml                 # usa guion, no underscore
+        args: --no-git --redact -v
+
           github_token: ${{ secrets.GITHUB_TOKEN }}
           config_path: .gitleaks.toml
           args: --no-git --redact -v
