@@ -35,4 +35,5 @@ app/tests/smoke-e2e.mjs
 n8n/flows/heartbeat.json
 cloudflared/config.yml.example
 env.example
+<!-- ci: trigger -->
 ```
