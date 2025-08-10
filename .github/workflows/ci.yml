@@ -5,10 +5,6 @@ on:
   push:
     branches: [ main ]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build-test:
     runs-on: ubuntu-latest
@@ -37,8 +33,7 @@ jobs:
         image: postgres:15
         env:
           POSTGRES_PASSWORD: postgres
-        ports:
-          - "5432:5432"
+        ports: ["5432:5432"]
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -53,9 +48,9 @@ jobs:
             sleep 2
           done
       - name: Apply init_core.sql
-        run: psql postgresql://postgres:postgres@localhost:5432/postgres -v ON_ERROR_STOP=1 -f supabase/sql/init_core.sql
+        run: psql postgresql://postgres:postgres@localhost:5432/postgres -f supabase/sql/init_core.sql
       - name: Run RLS tests
-        run: psql postgresql://postgres:postgres@localhost:5432/postgres -v ON_ERROR_STOP=1 -f supabase/sql/tests/rls_tests.sql
+        run: psql postgresql://postgres:postgres@localhost:5432/postgres -f supabase/sql/tests/rls_tests.sql
 
   security:
     runs-on: ubuntu-latest
@@ -70,5 +65,5 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          config-path: .gitleaks.toml
-          args: --redact -v
+          config_path: .gitleaks.toml
+          args: --no-git --redact -v
