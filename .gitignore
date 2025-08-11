@@ -1,1 +1,6 @@
 .DS_Store
+
+# local dev (vite)
+app/.env.local
+app/tsconfig.tsbuildinfo
+app/vite.config.ts.bak
