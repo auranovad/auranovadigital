@@ -37,3 +37,17 @@ cloudflared/config.yml.example
 env.example
 <!-- ci: trigger -->
 ```
+
+
+
+```bash
+cd app
+npm ci
+npm run typecheck
+npm run lint
+npm run build
+npm run test
+npm run preview
+
+
+
