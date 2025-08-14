@@ -1,0 +1,38 @@
+name: path-guardian
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+jobs:
+  guard:
+    name: Guardar paths cuando el autor es lovable-dev[bot]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Detect PR author
+        id: who
+        run: echo "author=${{ github.event.pull_request.user.login }}" >> $GITHUB_OUTPUT
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: List changed files vs base
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
+          git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD > changed.txt
+          echo "Changed files:"; cat changed.txt
+
+      - name: Enforce allowed paths for Lovable
+        if: steps.who.outputs.author == 'lovable-dev[bot]'
+        run: |
+          ALLOWED_REGEX='^(app/|README\.md$|CONTRIBUTING\.md$|\.github/pull_request_template\.md$|app/package\.json$|app/vite\.config\.ts$|app/vercel\.json$|app/vitest.*|app/tests/|app/.eslintrc\.json$)'
+          BAD=$(grep -v -E "$ALLOWED_REGEX" changed.txt || true)
+          if [ -n "$BAD" ]; then
+            echo "❌ PR de lovable-dev[bot] toca rutas NO permitidas:"
+            echo "$BAD"
+            echo "✔️ Permitidas: app/**, README.md, CONTRIBUTING.md, app/package.json, app/vite.config.ts, app/vercel.json, app/tests/**, app/vitest*, app/.eslintrc.json"
+            exit 1
+          else
+            echo "✅ Path-Guardian OK para lovable-dev[bot]"
+          fi
