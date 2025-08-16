@@ -4,3 +4,14 @@
 app/.env.local
 app/tsconfig.tsbuildinfo
 app/vite.config.ts.bak
+
+# backups fuera de app
+backups/
+
+# backups
+backups/
+app/_backup*
+
+# backups
+backups/
+app/_backup*
