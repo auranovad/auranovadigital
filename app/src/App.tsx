@@ -1,31 +1,44 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import AuthCorner from "@/components/AuthCorner";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
-import Admin from "./pages/Admin";
-import AdminWizard from "./pages/AdminWizard";
-import NotFound from "./pages/NotFound";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import Index from "@/pages/Index";
+import Admin from "@/pages/Admin";
+import AdminWizard from "@/pages/AdminWizard";
+import Login from "@/pages/Login";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+      <AuthCorner />
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/admin/wizard" element={<AdminWizard />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
+          <Route path="/login" element={<Login />} />
+
+          {/* Admin protegido */}
+          <Route
+            path="/admin/*"
+            element={
+              <ProtectedRoute>
+                <Admin />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Wizard protegido (si lo usas aparte del Admin) */}
+          <Route
+            path="/admin/wizard/*"
+            element={
+              <ProtectedRoute>
+                <AdminWizard />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
-
-export default App;
+    </QueryClientProvider>
+  );
+}
