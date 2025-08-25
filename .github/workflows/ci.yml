@@ -12,28 +12,24 @@ concurrency:
 jobs:
   build-test:
     runs-on: ubuntu-latest
-    # Exponemos los secrets como ENV del job
+    # Inyectamos las env desde Secrets para tests/CI (Vitest/Node)
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
-          cache-dependency-path: app/package-lock.json
 
-      # Creamos .env para que Vitest/Vite lean import.meta.env.*
-      - name: Create .env for CI
+      # Creamos .env dentro de /app para que Vite/Vitest puedan leerlo
+      - name: Create .env for Vite
         working-directory: app
         run: |
-          printf "VITE_SUPABASE_URL=%s\n" "$VITE_SUPABASE_URL" > .env
-          printf "VITE_SUPABASE_ANON_KEY=%s\n" "$VITE_SUPABASE_ANON_KEY" >> .env
-          echo "CI .env created:"
-          cat .env
+          printf "VITE_SUPABASE_URL=%s\nVITE_SUPABASE_ANON_KEY=%s\n" \
+            "$VITE_SUPABASE_URL" "$VITE_SUPABASE_ANON_KEY" > .env
+          echo "Created app/.env with SUPABASE values"
 
       - name: Install deps
         working-directory: app
@@ -58,7 +54,7 @@ jobs:
         image: postgres:15
         env:
           POSTGRES_PASSWORD: postgres
-        ports: ["5432:5432"]
+        ports: [ "5432:5432" ]
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -66,6 +62,9 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
       - name: Wait for DB
         run: |
@@ -90,11 +89,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Gitleaks con inputs correctos (guarda/oculta posibles secrets)
+      # Gitleaks con flags correctos (evita los warnings de inputs inválidos)
       - name: gitleaks (secret scan)
         uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          config-path: .gitleaks.toml
-          redact: "true"
+          args: --redact --config=.gitleaks.toml
