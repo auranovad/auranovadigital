@@ -2,17 +2,15 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
-// --- Guard: si faltan las env en build, fallamos aquí mismo ---
-const required = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY'] as const
-for (const k of required) {
-  if (!process.env[k]) {
-    throw new Error(`Missing ${k} at build time`)
-  }
-}
-// ---------------------------------------------------------------
+// Aceptamos VITE_* o NEXT_PUBLIC_* (por si sólo configuraste una de las dos)
+const url  = process.env.VITE_SUPABASE_URL       ?? process.env.NEXT_PUBLIC_SUPABASE_URL
+const anon = process.env.VITE_SUPABASE_ANON_KEY  ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+if (!url)  throw new Error('Missing VITE_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL at build time')
+if (!anon) throw new Error('Missing VITE_SUPABASE_ANON_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY at build time')
 
 export default defineConfig({
-  base: '/', // importante para servir /assets en producción
+  base: '/', // sirve /assets correctamente en prod
   plugins: [react()],
   resolve: {
     alias: {
@@ -21,11 +19,10 @@ export default defineConfig({
     },
   },
   define: {
-    // evita "process is not defined" si alguna lib lo usa en el bundle
+    // Evita "process is not defined" si alguna lib lo usa en el bundle
     'process.env': {},
-
-    // Incrustamos explícitamente las VITE_* en el bundle
-    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL),
-    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY),
+    // Incrustamos explícitamente los valores elegidos (url/anon) en el bundle
+    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(url),
+    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(anon),
   },
 })
