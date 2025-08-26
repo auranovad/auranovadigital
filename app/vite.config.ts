@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 
 export default defineConfig({
-  base: '',                   // importante para servir /assets en producción
+  base: '/', // importante para servir /assets en producción
   plugins: [react()],
   resolve: {
     alias: {
@@ -12,6 +12,7 @@ export default defineConfig({
     },
   },
   define: {
-    'process.env': {},        // evita "process is not defined" en el navegador
+    // Previene "process is not defined" si alguna lib lo toca en el bundle
+    'process.env': {},
   },
 })
