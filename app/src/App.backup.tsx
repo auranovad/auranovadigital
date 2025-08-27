@@ -1,12 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "./contexts/AuthContext";
 
+import { AuthProvider } from "./contexts/AuthContext";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
 import Login from "./pages/Login";
-import Admin from "./pages/Admin";
 
 const queryClient = new QueryClient();
 
@@ -19,7 +18,6 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/auth" element={<Navigate to="/login" replace />} />
 
-            <Route path="/t/:slug/admin" element={<Layout><Admin /></Layout>} />
             <Route path="/" element={<Layout><Dashboard /></Layout>} />
             <Route path="/leads" element={<Layout><Leads /></Layout>} />
 
