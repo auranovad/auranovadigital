@@ -92,5 +92,5 @@ jobs:
       # Gitleaks con flags correctos (evita los warnings de inputs inválidos)
       - name: gitleaks (secret scan)
         uses: gitleaks/gitleaks-action@v2
-        with:
-          args: --redact --config=.gitleaks.toml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
