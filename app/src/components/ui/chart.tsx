@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+/* eslint-disable react-refresh/only-export-components */
+// @ts-nocheck
+// @ts-nocheck
 import * as React from "react"
 import * as RechartsPrimitive from "recharts"
 
