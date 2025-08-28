@@ -1,19 +1,18 @@
 // app/src/components/RequireRole.tsx
 import { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext"; // si prefieres, puedes usar "../contexts/AuthContext"
 
-// Nota: mantenemos el prop 'minRole' para compatibilidad,
-// pero esta versión mínima sólo verifica que el usuario esté logueado.
-// (Suficiente para pasar CI. Más adelante podemos conectar roles reales.)
+// Mantengo el prop `minRole` por compatibilidad, pero en esta Fase 1
+// solo verificamos que el usuario esté logueado (suficiente para CI).
 type Role = "viewer" | "editor" | "admin";
 
 interface Props {
   children: ReactNode;
-  minRole: Role;
+  minRole?: Role;
 }
 
-export default function RequireRole({ children }: Props) {
+function RequireRole({ children }: Props) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -30,3 +29,6 @@ export default function RequireRole({ children }: Props) {
 
   return <>{children}</>;
 }
+
+export default RequireRole;
+export { RequireRole };
