@@ -27,7 +27,7 @@ export function useTenantRole() {
 
       setLoading(true);
 
-      // Join directo a tenants por slug (RLS ya habilitado)
+      // Join directo a tenants por slug (RLS ON)
       const { data: rows, error } = await supabase
         .from("tenant_members")
         .select("tenant_id, role, tenants!inner(id, slug)")
