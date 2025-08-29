@@ -13,6 +13,7 @@ type Lead = {
   phone: string | null;
   source: string;
   status: string;
+  created_at?: string;
 };
 
 export default function TenantLeads() {
@@ -29,9 +30,10 @@ export default function TenantLeads() {
       return;
     }
     setLoading(true);
+    // Quitar genéricos: .from("leads") y castear
     const { data, error } = await supabase
-      .from<Lead>("leads")
-      .select("id, tenant_id, name, email, phone, source, status")
+      .from("leads")
+      .select("id, tenant_id, name, email, phone, source, status, created_at")
       .eq("tenant_id", tenantId)
       .order("created_at", { ascending: false });
 
@@ -50,7 +52,8 @@ export default function TenantLeads() {
 
   const addLead = async () => {
     if (!tenantId) return;
-    const { error } = await supabase.from<Lead>("leads").insert({
+    // Quitar genéricos en insert también
+    const { error } = await supabase.from("leads").insert({
       tenant_id: tenantId,
       name: "Nuevo Lead",
       email: "lead@example.com",
