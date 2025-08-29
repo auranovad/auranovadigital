@@ -5,9 +5,6 @@ import { useAuth } from "@/contexts/AuthContext";
 
 export type TenantRole = "viewer" | "editor" | "admin" | "none";
 
-type Tenant = { id: string; slug: string; name: string };
-type TenantMember = { tenant_id: string; user_id: string; role: TenantRole };
-
 export function useTenantRole() {
   const { user } = useAuth();
   const slug = useTenantSlug();
@@ -27,51 +24,32 @@ export function useTenantRole() {
         setLoading(false);
         return;
       }
+
       setLoading(true);
 
-      const { data: tenantData, error: tErr } = await supabase
-        .from("tenants")
-        .select("id, slug, name")
-        .eq("slug", slug)
+      // Join directo a tenants por slug (RLS ON)
+      const { data: rows, error } = await supabase
+        .from("tenant_members")
+        .select("tenant_id, role, tenants!inner(id, slug)")
+        .eq("user_id", user.id)
+        .eq("tenants.slug", slug)
         .limit(1);
 
       if (!alive) return;
 
-      const tenants = (tenantData ?? []) as Tenant[];
-      if (tErr || tenants.length === 0) {
+      if (error || !rows || rows.length === 0) {
         setTenantId(null);
         setRole("none");
-        setLoading(false);
-        return;
-      }
-
-      const t = tenants[0];
-      setTenantId(t.id);
-
-      const { data: memberData, error: mErr } = await supabase
-        .from("tenant_members")
-        .select("tenant_id, user_id, role")
-        .eq("tenant_id", t.id)
-        .eq("user_id", user.id)
-        .limit(1);
-
-      if (!alive) return;
-
-      const members = (memberData ?? []) as TenantMember[];
-      if (mErr || members.length === 0) {
-        setRole("none");
       } else {
-        setRole(members[0].role as TenantRole);
+        setTenantId(String(rows[0].tenant_id));
+        setRole((rows[0].role as TenantRole) ?? "none");
       }
+
       setLoading(false);
     }
 
     run();
-
-    return () => {
-      // <- esto hace que 'alive' se reasigne a false y elimina el warning prefer-const
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [slug, user?.id]);
 
   return { tenantId, role, loading };
