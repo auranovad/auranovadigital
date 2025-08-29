@@ -1,76 +1,70 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/contexts/AuthContext';
-import { useTenantSlug } from '@/lib/tenant';
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { useTenantSlug } from "@/lib/tenant";
+import { useAuth } from "@/contexts/AuthContext";
 
-export type TenantRole = 'admin' | 'editor' | 'viewer';
+export type TenantRole = "viewer" | "editor" | "admin" | "none";
+type Tenant = { id: string; slug: string; name: string };
+type TenantMember = { tenant_id: string; user_id: string; role: TenantRole };
 
-interface UseTenantRoleReturn {
-  tenantId: string | null;
-  role: TenantRole | null;
-  loading: boolean;
-  error: string | null;
-}
-
-export const useTenantRole = (): UseTenantRoleReturn => {
+export function useTenantRole() {
   const { user } = useAuth();
-  const tenantSlug = useTenantSlug();
+  const slug = useTenantSlug();
+
   const [tenantId, setTenantId] = useState<string | null>(null);
-  const [role, setRole] = useState<TenantRole | null>(null);
+  const [role, setRole] = useState<TenantRole>("none");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const run = async () => {
-      if (!user || !tenantSlug) {
+    let alive = true;
+
+    async function run() {
+      if (!user) {
         setTenantId(null);
-        setRole(null);
+        setRole("none");
         setLoading(false);
         return;
       }
-      try {
-        setLoading(true);
-        setError(null);
+      setLoading(true);
 
-        // Busca el tenant por slug o por name
-        const { data: tenant, error: te } = await supabase
-          .from('tenants')
-          .select('id, slug, name')
-          .or(`slug.eq.${tenantSlug},name.eq.${tenantSlug}`)
-          .maybeSingle();
+      const { data: tenants, error: tErr } = await supabase
+        .from<Tenant>("tenants")
+        .select("id, slug, name")
+        .eq("slug", slug)
+        .limit(1);
 
-        if (te || !tenant) {
-          setError(`Tenant no encontrado: ${tenantSlug}`);
-          setTenantId(null);
-          setRole(null);
-          return;
-        }
-        setTenantId(tenant.id);
+      if (!alive) return;
 
-        // Busca el membership del usuario en ese tenant
-        const { data: membership, error: me } = await supabase
-          .from('tenant_members')
-          .select('role')
-          .eq('tenant_id', tenant.id)
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (me || !membership) {
-          setError('No eres miembro de este tenant');
-          setRole(null);
-        } else {
-          setRole(membership.role as TenantRole);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error desconocido');
+      if (tErr || !tenants?.length) {
         setTenantId(null);
-        setRole(null);
-      } finally {
+        setRole("none");
         setLoading(false);
+        return;
       }
-    };
-    run();
-  }, [user, tenantSlug]);
 
-  return { tenantId, role, loading, error };
-};
+      const t = tenants[0];
+      setTenantId(t.id);
+
+      const { data: members, error: mErr } = await supabase
+        .from<TenantMember>("tenant_members")
+        .select("tenant_id, user_id, role")
+        .eq("tenant_id", t.id)
+        .eq("user_id", user.id)
+        .limit(1);
+
+      if (!alive) return;
+
+      if (mErr || !members?.length) {
+        setRole("none");
+      } else {
+        setRole(members[0].role as TenantRole);
+      }
+      setLoading(false);
+    }
+
+    run();
+    return () => { alive = false; };
+  }, [slug, user?.id]);
+
+  return { tenantId, role, loading };
+}
