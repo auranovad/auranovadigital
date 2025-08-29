@@ -21,6 +21,7 @@ export function useTenantRole() {
 
     async function run() {
       if (!user) {
+        if (!alive) return;
         setTenantId(null);
         setRole("none");
         setLoading(false);
@@ -28,7 +29,6 @@ export function useTenantRole() {
       }
       setLoading(true);
 
-      // Quitar genéricos: .from("tenants") y castear
       const { data: tenantData, error: tErr } = await supabase
         .from("tenants")
         .select("id, slug, name")
@@ -48,7 +48,6 @@ export function useTenantRole() {
       const t = tenants[0];
       setTenantId(t.id);
 
-      // Quitar genéricos: .from("tenant_members") y castear
       const { data: memberData, error: mErr } = await supabase
         .from("tenant_members")
         .select("tenant_id, user_id, role")
@@ -68,8 +67,12 @@ export function useTenantRole() {
     }
 
     run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, user?.id]); // mantenemos dependencias prácticas para evitar el warning
+
+    return () => {
+      // <- esto hace que 'alive' se reasigne a false y elimina el warning prefer-const
+      alive = false;
+    };
+  }, [slug, user?.id]);
 
   return { tenantId, role, loading };
 }
