@@ -1,8 +1,6 @@
-// app/src/pages/TenantLeads.tsx
-import { useEffect, useState, FormEvent } from "react";
+import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { useTenantSlug } from "@/lib/tenant";
-import { useTenantRole } from "@/hooks/useTenantRole";
+import { useTenantRole, type TenantRole } from "@/hooks/useTenantRole";
 
 type Lead = {
   id: string;
@@ -10,146 +8,151 @@ type Lead = {
   name: string | null;
   email: string | null;
   phone: string | null;
-  source: string;
-  status: string;
-  created_at?: string;
-};
-
-const EMPTY: Omit<Lead, "id" | "tenant_id"> = {
-  name: "",
-  email: "",
-  phone: "",
-  source: "manual",
-  status: "new",
+  source: string | null;
+  status: string | null;
+  created_at: string;
 };
 
 export default function TenantLeads() {
-  const slug = useTenantSlug();
-  const { tenantId, role, loading: roleLoading } = useTenantRole();
-
+  const { tenantId, role, loading } = useTenantRole();
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(EMPTY);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const canCreate = role === "editor" || role === "admin";
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
 
   async function fetchLeads() {
-    if (!tenantId) {
-      setLeads([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-
+    if (!tenantId) return;
+    setError(null);
+    console.log("[Leads] fetch for tenant", tenantId);
     const { data, error } = await supabase
       .from("leads")
       .select("id, tenant_id, name, email, phone, source, status, created_at")
       .eq("tenant_id", tenantId)
-      .order("created_at", { ascending: false })
-      .limit(50);
+      .order("created_at", { ascending: false });
 
-    if (!error) setLeads((data ?? []) as Lead[]);
-    setLoading(false);
+    if (error) {
+      console.error("[Leads] fetch error:", error);
+      setError(error.message);
+      setLeads([]);
+      return;
+    }
+    setLeads((data ?? []) as Lead[]);
   }
 
   useEffect(() => {
-    fetchLeads();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (tenantId) fetchLeads();
   }, [tenantId]);
 
-  async function handleCreate(e: FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!tenantId) return;
-
-    const payload = {
-      tenant_id: tenantId,
-      name: form.name?.trim() || null,
-      email: form.email?.trim() || null,
-      phone: form.phone?.trim() || null,
-      source: form.source || "manual",
-      status: form.status || "new",
-    };
-
-    const { error } = await supabase.from("leads").insert(payload);
-    if (error) {
-      alert(error.message);
+    if (!tenantId) {
+      setError("No hay tenant asignado.");
+      return;
+    }
+    if (!name.trim()) {
+      setError("El nombre es requerido.");
       return;
     }
 
+    setSaving(true);
+    setError(null);
+    console.log("[Leads] insert", { tenantId, name, email, phone });
+
+    const { error } = await supabase.from("leads").insert({
+      tenant_id: tenantId,
+      name,
+      email,
+      phone,
+      source: "manual",
+      status: "new",
+    } as never);
+
+    setSaving(false);
+
+    if (error) {
+      console.error("[Leads] insert error:", error);
+      setError(error.message);
+      return;
+    }
+
+    // Exito: limpiar, cerrar formulario y recargar lista
+    setName("");
+    setEmail("");
+    setPhone("");
     setShowForm(false);
-    setForm(EMPTY);
-    fetchLeads();
+    await fetchLeads();
+  }
+
+  const canEdit = (role === "admin" || role === "editor") as boolean;
+
+  if (loading) {
+    return <div style={{ padding: 16 }}>Cargando…</div>;
   }
 
   return (
-    <div className="max-w-3xl mx-auto p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-semibold">Leads</h1>
+    <div style={{ padding: 16, maxWidth: 720 }}>
+      <h2>Leads</h2>
 
-        {tenantId && canCreate && (
-          <button
-            className="px-3 py-2 rounded-md border text-sm"
-            onClick={() => setShowForm((s) => !s)}
-          >
-            {showForm ? "Cancelar" : "Nuevo lead"}
-          </button>
-        )}
+      {/* Debug info pequeña (útil en dev) */}
+      <div style={{ fontSize: 12, color: "#666", marginBottom: 12 }}>
+        tenantId: <b>{tenantId ?? "(null)"}</b> &middot; role: <b>{role}</b>
       </div>
 
-      {showForm && tenantId && canCreate && (
-        <form
-          onSubmit={handleCreate}
-          className="grid gap-3 border rounded-lg p-4 mb-6"
+      {error && (
+        <div style={{ color: "crimson", marginBottom: 12 }}>{error}</div>
+      )}
+
+      {canEdit && !showForm && (
+        <button
+          onClick={() => {
+            setShowForm(true);
+            setError(null);
+          }}
+          style={{ marginBottom: 12 }}
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          + Nuevo lead
+        </button>
+      )}
+
+      {canEdit && showForm && (
+        <form onSubmit={onSubmit} style={{ marginBottom: 16 }}>
+          <div style={{ display: "grid", gap: 8 }}>
             <input
-              className="border rounded p-2"
               placeholder="Nombre"
-              value={form.name ?? ""}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
             />
             <input
-              className="border rounded p-2"
               placeholder="Email"
               type="email"
-              value={form.email ?? ""}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
             />
             <input
-              className="border rounded p-2"
               placeholder="Teléfono"
-              value={form.phone ?? ""}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
             />
-            <input
-              className="border rounded p-2"
-              placeholder="Fuente"
-              value={form.source}
-              onChange={(e) => setForm({ ...form, source: e.target.value })}
-            />
-            <select
-              className="border rounded p-2"
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
-            >
-              <option value="new">new</option>
-              <option value="contacted">contacted</option>
-              <option value="qualified">qualified</option>
-            </select>
           </div>
 
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              className="px-3 py-2 bg-black text-white rounded-md text-sm"
-            >
-              Guardar
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button type="submit" disabled={saving}>
+              {saving ? "Guardando…" : "Guardar"}
             </button>
             <button
               type="button"
-              className="px-3 py-2 border rounded-md text-sm"
-              onClick={() => setShowForm(false)}
+              onClick={() => {
+                setShowForm(false);
+                setName("");
+                setEmail("");
+                setPhone("");
+                setError(null);
+              }}
             >
               Cancelar
             </button>
@@ -157,22 +160,18 @@ export default function TenantLeads() {
         </form>
       )}
 
-      {roleLoading || loading ? (
-        <p>Cargando...</p>
-      ) : leads.length === 0 ? (
+      {leads.length === 0 ? (
         <p>No hay leads.</p>
       ) : (
-        <ul className="divide-y">
+        <ul style={{ paddingLeft: 16 }}>
           {leads.map((l) => (
-            <li key={l.id} className="py-3">
-              <div className="font-medium">
-                {l.name || "(sin nombre)"}{" "}
-                <span className="text-xs px-2 py-0.5 ml-2 rounded border">
-                  {l.status}
-                </span>
-              </div>
-              <div className="text-sm text-gray-600">
-                {l.email || "—"} · {l.phone || "—"} · {l.source}
+            <li key={l.id} style={{ marginBottom: 8 }}>
+              <b>{l.name}</b>{" "}
+              <span style={{ color: "#666" }}>
+                ({l.email ?? "sin email"} / {l.phone ?? "sin teléfono"})
+              </span>
+              <div style={{ fontSize: 12, color: "#888" }}>
+                {l.source ?? "manual"} · {l.status ?? "new"}
               </div>
             </li>
           ))}
