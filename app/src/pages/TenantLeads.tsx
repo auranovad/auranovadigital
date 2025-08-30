@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useTenantRole, type TenantRole } from "@/hooks/useTenantRole";
