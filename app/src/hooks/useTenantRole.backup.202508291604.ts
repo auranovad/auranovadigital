@@ -27,22 +27,9 @@ export function useTenantRole() {
 
       setLoading(true);
 
-      // --- OVERRIDE DEV (usa las variables locales sin consultar tenants)
-      const forcedSlug  = (import.meta as any).env.VITE_FORCE_TENANT_SLUG as string | undefined;
-      const forcedRole  = ((import.meta as any).env.VITE_FORCE_ROLE as TenantRole) || "admin";
-      const forcedId    = (import.meta as any).env.VITE_FORCE_TENANT_ID as string | undefined;
-
-      if (forcedId && forcedSlug && slug === forcedSlug) {
-        if (!alive) return;
-        setTenantId(forcedId);
-        setRole(forcedRole);
-        setLoading(false);
-        return;
-      }
-
-      // --- Membership real (RLS)
+      // Join directo a tenants por slug (RLS ya habilitado)
       const { data: rows, error } = await supabase
-        .from("tenant_members" as any)
+        .from("tenant_members")
         .select("tenant_id, role, tenants!inner(id, slug)")
         .eq("user_id", user.id)
         .eq("tenants.slug", slug)
@@ -53,12 +40,11 @@ export function useTenantRole() {
       if (error || !rows || rows.length === 0) {
         setTenantId(null);
         setRole("none");
-        setLoading(false);
-        return;
+      } else {
+        setTenantId(String(rows[0].tenant_id));
+        setRole((rows[0].role as TenantRole) ?? "none");
       }
 
-      setTenantId(String(rows[0].tenant_id));
-      setRole((rows[0].role as TenantRole) ?? "none");
       setLoading(false);
     }
 

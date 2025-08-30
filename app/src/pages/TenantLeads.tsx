@@ -1,9 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { useTenantRole } from "@/hooks/useTenantRole";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useTenantRole, type TenantRole } from "@/hooks/useTenantRole";
 
 type Lead = {
   id: string;
@@ -11,26 +8,26 @@ type Lead = {
   name: string | null;
   email: string | null;
   phone: string | null;
-  source: string;
-  status: string;
-  created_at?: string;
+  source: string | null;
+  status: string | null;
+  created_at: string;
 };
 
 export default function TenantLeads() {
-  const { tenantId, role } = useTenantRole();
+  const { tenantId, role, loading } = useTenantRole();
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const canCreate = role === "editor" || role === "admin";
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
 
-  const fetchLeads = useCallback(async () => {
-    if (!tenantId) {
-      setLeads([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    // Quitar genéricos: .from("leads") y castear
+  async function fetchLeads() {
+    if (!tenantId) return;
+    setError(null);
+    console.log("[Leads] fetch for tenant", tenantId);
     const { data, error } = await supabase
       .from("leads")
       .select("id, tenant_id, name, email, phone, source, status, created_at")
@@ -38,67 +35,147 @@ export default function TenantLeads() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("[Leads] fetch error", error);
+      console.error("[Leads] fetch error:", error);
+      setError(error.message);
       setLeads([]);
-    } else {
-      setLeads((data ?? []) as Lead[]);
-    }
-    setLoading(false);
-  }, [tenantId]);
-
-  useEffect(() => {
-    fetchLeads();
-  }, [fetchLeads]);
-
-  const addLead = async () => {
-    if (!tenantId) return;
-    // Quitar genéricos en insert también
-    const { error } = await supabase.from("leads").insert({
-      tenant_id: tenantId,
-      name: "Nuevo Lead",
-      email: "lead@example.com",
-      phone: "000-000",
-      source: "manual",
-      status: "new",
-    } as Lead);
-    if (error) {
-      console.error("[Leads] insert error", error);
       return;
     }
-    fetchLeads();
-  };
+    setLeads((data ?? []) as Lead[]);
+  }
+
+  useEffect(() => {
+    if (tenantId) fetchLeads();
+  }, [tenantId]);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tenantId) {
+      setError("No hay tenant asignado.");
+      return;
+    }
+    if (!name.trim()) {
+      setError("El nombre es requerido.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    console.log("[Leads] insert", { tenantId, name, email, phone });
+
+    const { error } = await supabase.from("leads").insert({
+      tenant_id: tenantId,
+      name,
+      email,
+      phone,
+      source: "manual",
+      status: "new",
+    } as never);
+
+    setSaving(false);
+
+    if (error) {
+      console.error("[Leads] insert error:", error);
+      setError(error.message);
+      return;
+    }
+
+    // Exito: limpiar, cerrar formulario y recargar lista
+    setName("");
+    setEmail("");
+    setPhone("");
+    setShowForm(false);
+    await fetchLeads();
+  }
+
+  const canEdit = (role === "admin" || role === "editor") as boolean;
+
+  if (loading) {
+    return <div style={{ padding: 16 }}>Cargando…</div>;
+  }
 
   return (
-    <div className="container mx-auto px-4 py-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold">Leads</h2>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline">role: {role}</Badge>
-          {canCreate && <Button onClick={addLead}>Añadir lead</Button>}
-        </div>
+    <div style={{ padding: 16, maxWidth: 720 }}>
+      <h2>Leads</h2>
+
+      {/* Debug info pequeña (útil en dev) */}
+      <div style={{ fontSize: 12, color: "#666", marginBottom: 12 }}>
+        tenantId: <b>{tenantId ?? "(null)"}</b> &middot; role: <b>{role}</b>
       </div>
 
-      {loading ? (
-        <div>Cargando…</div>
+      {error && (
+        <div style={{ color: "crimson", marginBottom: 12 }}>{error}</div>
+      )}
+
+      {canEdit && !showForm && (
+        <button
+          onClick={() => {
+            setShowForm(true);
+            setError(null);
+          }}
+          style={{ marginBottom: 12 }}
+        >
+          + Nuevo lead
+        </button>
+      )}
+
+      {canEdit && showForm && (
+        <form onSubmit={onSubmit} style={{ marginBottom: 16 }}>
+          <div style={{ display: "grid", gap: 8 }}>
+            <input
+              placeholder="Nombre"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+            <input
+              placeholder="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <input
+              placeholder="Teléfono"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button type="submit" disabled={saving}>
+              {saving ? "Guardando…" : "Guardar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowForm(false);
+                setName("");
+                setEmail("");
+                setPhone("");
+                setError(null);
+              }}
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
+
+      {leads.length === 0 ? (
+        <p>No hay leads.</p>
       ) : (
-        <div className="grid gap-3">
+        <ul style={{ paddingLeft: 16 }}>
           {leads.map((l) => (
-            <Card key={l.id}>
-              <CardHeader>
-                <CardTitle className="text-sm">{l.name || "Sin nombre"}</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground space-y-1">
-                <div>Email: {l.email || "—"}</div>
-                <div>Tel: {l.phone || "—"}</div>
-                <div>Source: {l.source}</div>
-                <div>Status: {l.status}</div>
-              </CardContent>
-            </Card>
+            <li key={l.id} style={{ marginBottom: 8 }}>
+              <b>{l.name}</b>{" "}
+              <span style={{ color: "#666" }}>
+                ({l.email ?? "sin email"} / {l.phone ?? "sin teléfono"})
+              </span>
+              <div style={{ fontSize: 12, color: "#888" }}>
+                {l.source ?? "manual"} · {l.status ?? "new"}
+              </div>
+            </li>
           ))}
-          {!leads.length && (
-            <div className="text-sm text-muted-foreground">No hay leads.</div>
-          )}
-        </div>
+        </ul>
       )}
     </div>
   );
