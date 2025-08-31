@@ -36,20 +36,22 @@ export default function TenantLeads() {
         .order("created_at", { ascending: false });
 
       if (!alive) return;
-      if (!error) setLeads((data ?? []) as any);
+      if (!error) setLeads((data ?? []) as Lead[]);
     })();
     return () => { alive = false; };
   }, [tenantId]);
 
   async function saveLead() {
     if (!tenantId) return;
-    const { error } = await supabase.from("leads").insert({
+    const toInsert: Lead = {
       tenant_id: tenantId,
-      name, email, phone,
+      name,
+      email,
+      phone,
       source: "web",
       status: "new",
-    } as any);
-
+    };
+    const { error } = await supabase.from("leads").insert(toInsert as any); // insert acepta objeto; evitamos 'any' en el resto
     if (error) {
       console.error(error);
       alert(error.message);
@@ -65,7 +67,7 @@ export default function TenantLeads() {
       .eq("tenant_id", tenantId)
       .order("created_at", { ascending: false });
 
-    setLeads((data ?? []) as any);
+    setLeads((data ?? []) as Lead[]);
   }
 
   return (
@@ -98,7 +100,10 @@ export default function TenantLeads() {
               />
               <div>
                 <button onClick={saveLead}>Guardar</button>
-                <button onClick={() => { setCreating(false); setName(""); setEmail(""); setPhone(""); }} style={{ marginLeft: 8 }}>
+                <button
+                  onClick={() => { setCreating(false); setName(""); setEmail(""); setPhone(""); }}
+                  style={{ marginLeft: 8 }}
+                >
                   Cancelar
                 </button>
               </div>
@@ -107,7 +112,11 @@ export default function TenantLeads() {
         </div>
       )}
 
-      {!tenantId && <p style={{ color: "crimson" }}>Tenant no encontrado para este slug. ¿Creaste el tenant y tu membership en Supabase?</p>}
+      {!tenantId && (
+        <p style={{ color: "crimson" }}>
+          Tenant no encontrado para este slug. ¿Creaste el tenant y tu membership en Supabase?
+        </p>
+      )}
 
       {leads.length === 0 ? (
         <p>No hay leads.</p>
