@@ -51,7 +51,7 @@ export default function TenantLeads() {
       source: "web",
       status: "new",
     };
-    const { error } = await supabase.from("leads").insert(toInsert as any); // insert acepta objeto; evitamos 'any' en el resto
+    const { error } = await supabase.from("leads").insert(toInsert); // insert acepta objeto; evitamos 'any' en el resto
     if (error) {
       console.error(error);
       alert(error.message);
