@@ -11,6 +11,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 import RequireRole from "./components/RequireRole";
 import TenantAdmin from "./pages/TenantAdmin";
+import TenantMembers from "@/pages/TenantMembers"; // si tu alias "@" no funciona, cambia a "./pages/TenantMembers"
 import TenantLeads from "./pages/TenantLeads";
 import AdminWizard from "./pages/AdminWizard";
 
@@ -46,6 +47,14 @@ export default function App() {
                 </RequireRole>
               }
             />
+            <Route
+              path="/t/:slug/members"
+              element={
+                <RequireRole minRole="admin">
+                  <TenantMembers />
+                </RequireRole>
+              }
+            />
 
             {/* Redirecciones legacy -> multi-tenant */}
             <Route
@@ -66,6 +75,9 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
