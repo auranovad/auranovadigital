@@ -28,7 +28,7 @@ export default function TenantMembers() {
     if (!tenantId) return;
     setLoading(true);
     setErr(null);
-    const { data, error } = await supabase.rpc("member_list", { _tenant: tenantId });
+    const { data, error } = await supabase.rpc("member_list", { p_tenant: tenantId });
     if (error) {
       setErr(error.message);
     } else {
@@ -47,7 +47,7 @@ export default function TenantMembers() {
     if (!isAdmin || !tenantId) return;
     setErr(null);
     const { error } = await supabase.rpc("add_member_by_email", {
-      _tenant: tenantId,
+      p_tenant: tenantId,
       _email: inviteEmail.trim(),
       _role: inviteRole,
     });
