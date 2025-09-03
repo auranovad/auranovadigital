@@ -1,15 +1,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { useTenantSlug } from "@/lib/tenant";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenantSlug } from "@/lib/tenant";
 
 export type TenantRole = "viewer" | "editor" | "admin" | "none";
-
-type MemberRow = {
-  tenant_id: string;
-  role: TenantRole;
-  tenants: { id: string; slug: string };
-};
 
 export function useTenantRole() {
   const { user } = useAuth();
@@ -24,6 +18,7 @@ export function useTenantRole() {
 
     async function run() {
       if (!user) {
+        if (!alive) return;
         setTenantId(null);
         setRole("none");
         setLoading(false);
@@ -32,28 +27,9 @@ export function useTenantRole() {
 
       setLoading(true);
 
-      // ---- DEV override (solo local/QA) ----
-      const env = import.meta.env as {
-        VITE_FORCE_TENANT_SLUG?: string;
-        VITE_FORCE_ROLE?: TenantRole;
-        VITE_FORCE_TENANT_ID?: string;
-      };
-      const forcedSlug = env.VITE_FORCE_TENANT_SLUG;
-      const forcedRole = (env.VITE_FORCE_ROLE ?? "admin") as TenantRole;
-      const forcedId = env.VITE_FORCE_TENANT_ID;
-
-      if (forcedId && forcedSlug && slug === forcedSlug) {
-        if (!alive) return;
-        setTenantId(forcedId);
-        setRole(forcedRole);
-        setLoading(false);
-        return;
-      }
-      // --------------------------------------
-
       const { data, error } = await supabase
         .from("tenant_members")
-        .select("tenant_id, role, tenants!inner(id, slug)")
+        .select("tenant_id, role, tenants!inner()")
         .eq("user_id", user.id)
         .eq("tenants.slug", slug)
         .limit(1);
@@ -61,18 +37,18 @@ export function useTenantRole() {
       if (!alive) return;
 
       if (error) {
-        console.error("[useTenantRole] error", error);
+        console.error("useTenantRole error:", error);
         setTenantId(null);
         setRole("none");
         setLoading(false);
         return;
       }
 
-      const rows = (data ?? []) as MemberRow[];
-      if (rows.length > 0) {
-        const r = rows[0];
-        setTenantId(String(r.tenant_id));
-        setRole(r.role ?? "none");
+      const row = (data?.[0] ?? null) as { tenant_id?: string; role?: TenantRole } | null;
+
+      if (row?.tenant_id) {
+        setTenantId(String(row.tenant_id));
+        setRole((row.role as TenantRole) ?? "none");
       } else {
         setTenantId(null);
         setRole("none");
@@ -82,8 +58,12 @@ export function useTenantRole() {
     }
 
     run();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [slug, user?.id]);
 
   return { tenantId, role, loading };
 }
+
+export default useTenantRole;
