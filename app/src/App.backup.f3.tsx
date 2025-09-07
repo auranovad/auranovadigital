@@ -1,3 +1,4 @@
+// app/src/App.tsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -10,13 +11,9 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 import RequireRole from "./components/RequireRole";
 import TenantAdmin from "./pages/TenantAdmin";
-import TenantMembers from "./pages/TenantMembers";
+import TenantMembers from "@/pages/TenantMembers"; // si tu alias "@" no funciona, cambia a "./pages/TenantMembers"
 import TenantLeads from "./pages/TenantLeads";
 import AdminWizard from "./pages/AdminWizard";
-
-import Wizard from "./pages/Wizard";
-import TenantSchedule from "./pages/TenantSchedule";
-import TenantAgent from "./pages/TenantAgent";
 
 const DEFAULT_TENANT = "auranova";
 const queryClient = new QueryClient();
@@ -33,11 +30,7 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/auth" element={<Navigate to="/login" replace />} />
 
-            {/* Wizard */}
-            <Route path="/wizard" element={<Wizard />} />
-            <Route path="/onboarding" element={<Wizard />} />
-
-            {/* Multi-tenant protegidas */}
+            {/* Rutas multi-tenant protegidas */}
             <Route
               path="/t/:slug/admin"
               element={
@@ -62,24 +55,8 @@ export default function App() {
                 </RequireRole>
               }
             />
-            <Route
-              path="/t/:slug/schedule"
-              element={
-                <RequireRole minRole="viewer">
-                  <TenantSchedule />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/t/:slug/agent"
-              element={
-                <RequireRole minRole="viewer">
-                  <TenantAgent />
-                </RequireRole>
-              }
-            />
 
-            {/* Legacy -> multi-tenant */}
+            {/* Redirecciones legacy -> multi-tenant */}
             <Route
               path="/admin/*"
               element={<Navigate to={`/t/${DEFAULT_TENANT}/admin`} replace />}
@@ -89,7 +66,7 @@ export default function App() {
               element={<Navigate to={`/t/${DEFAULT_TENANT}/leads`} replace />}
             />
 
-            {/* Wizard extra (si lo usas aparte del Admin) */}
+            {/* Wizard (si lo usas aparte del Admin) */}
             <Route
               path="/admin/wizard/*"
               element={
@@ -98,6 +75,9 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

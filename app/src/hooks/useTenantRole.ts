@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
-import { useTenantSlug } from "@/lib/tenant";
 
-export type TenantRole = "viewer" | "editor" | "admin" | "none";
+export type TenantRole = "admin" | "editor" | "viewer" | "none";
+export type UseTenantRoleResult = {
+  tenantId: string | null;
+  role: TenantRole;
+  loading: boolean;
+};
 
-export function useTenantRole() {
+function useTenantRole(passedSlug?: string): UseTenantRoleResult {
   const { user } = useAuth();
-  const slug = useTenantSlug();
+  const { slug: routeSlug } = useParams();
+  const slug = passedSlug ?? (routeSlug as string | undefined);
 
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [role, setRole] = useState<TenantRole>("none");
@@ -16,54 +22,62 @@ export function useTenantRole() {
   useEffect(() => {
     let alive = true;
 
-    async function run() {
-      if (!user) {
-        if (!alive) return;
-        setTenantId(null);
-        setRole("none");
-        setLoading(false);
+    (async () => {
+      setLoading(true);
+
+      if (!user || !slug) {
+        if (alive) {
+          setTenantId(null);
+          setRole("none");
+          setLoading(false);
+        }
         return;
       }
 
-      setLoading(true);
+      // 1) Busca el tenant por slug
+      const { data: tenants, error: tErr } = await supabase
+        .from("tenants")
+        .select("id, slug")
+        .eq("slug", slug)
+        .limit(1);
 
-      const { data, error } = await supabase
+      if (tErr || !tenants || tenants.length === 0) {
+        if (alive) {
+          setTenantId(null);
+          setRole("none");
+          setLoading(false);
+        }
+        return;
+      }
+
+      const tid = tenants[0].id as string;
+
+      // 2) Busca tu membership y rol
+      const { data: rows, error: mErr } = await supabase
         .from("tenant_members")
-        .select("tenant_id, role, tenants!inner()")
+        .select("role")
+        .eq("tenant_id", tid)
         .eq("user_id", user.id)
-        .eq("tenants.slug", slug)
         .limit(1);
 
       if (!alive) return;
 
-      if (error) {
-        console.error("useTenantRole error:", error);
-        setTenantId(null);
+      setTenantId(tid);
+      if (mErr || !rows || rows.length === 0) {
         setRole("none");
-        setLoading(false);
-        return;
-      }
-
-      const row = (data?.[0] ?? null) as { tenant_id?: string; role?: TenantRole } | null;
-
-      if (row?.tenant_id) {
-        setTenantId(String(row.tenant_id));
-        setRole((row.role as TenantRole) ?? "none");
       } else {
-        setTenantId(null);
-        setRole("none");
+        setRole((rows[0].role as TenantRole) ?? "none");
       }
-
       setLoading(false);
-    }
+    })();
 
-    run();
     return () => {
       alive = false;
     };
-  }, [slug, user?.id]);
+  }, [user?.id, slug]);
 
   return { tenantId, role, loading };
 }
 
 export default useTenantRole;
+export { useTenantRole }; // <-- named export para que funcionen los imports antiguos
