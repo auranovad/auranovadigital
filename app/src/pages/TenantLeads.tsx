@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useTenantSlug } from "@/lib/tenant";
-import { useTenantRole } from "@/hooks/useTenantRole";
+import useTenantRole from "@/hooks/useTenantRole";
 
 type Lead = {
   id?: string;
