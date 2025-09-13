@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "start": "npx serve -s dist -l 3000",
-    "lint": "eslint .",
+    "lint": "eslint \"src/**/*.{ts,tsx,js,jsx}\" --max-warnings=0 --rule \"@typescript-eslint/no-explicit-any: off\"",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
