@@ -17,6 +17,7 @@ const ROLES: TenantRole[] = ["admin", "editor", "viewer", "none"];
 export default function TenantMembers() {
   const { slug } = useParams();
   const { tenantId, role: myRole } = useTenantRole(slug);
+
   const [rows, setRows] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [working, setWorking] = useState(false);
@@ -29,19 +30,12 @@ export default function TenantMembers() {
   async function loadMembers() {
     if (!tenantId) return;
     setLoading(true);
-    const { data, error } = await supabase.rpc("member_list", {
-      p_tenant: tenantId,
-    });
+    const { data, error } = await supabase.rpc("member_list", { p_tenant: tenantId });
     if (error) {
       console.error("member_list error", error);
       alert(error.message || "Error listando miembros");
     } else {
-      setRows(
-        (data as MemberRow[]).map((r) => ({
-          ...r,
-          role: (r.role as TenantRole) ?? "viewer",
-        }))
-      );
+      setRows((data as MemberRow[]).map((r) => ({ ...r, role: (r.role as TenantRole) ?? "viewer" })));
     }
     setLoading(false);
   }
@@ -53,27 +47,38 @@ export default function TenantMembers() {
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
-    if (!tenantId) return alert("Sin tenant seleccionado.");
-    if (!inviteEmail) return alert("Ingresa un email.");
+    if (!tenantId || !inviteEmail) return;
 
     setWorking(true);
-    const { error } = await supabase.rpc("add_member_by_email", {
-      p_tenant: tenantId,
-      p_email: inviteEmail.trim(),
-      p_role: inviteRole,
-    });
-    if (error) {
-      console.error("add_member_by_email error", error);
-      alert(
-        error.message ||
-          "No se pudo invitar. Si ves user_not_found, crea primero el usuario en Authentication → Users."
-      );
-    } else {
+    try {
+      // 1) Intenta la RPC si el usuario YA existe en Auth
+      const { error: rpcError } = await supabase.rpc("add_member_by_email", {
+        p_tenant: tenantId,
+        p_email: inviteEmail.trim(),
+        p_role: inviteRole,
+      });
+
+      // 2) Si NO existe, usa la Edge Function (crea usuario + membership + email)
+      if (rpcError && rpcError.message?.includes("user_not_found")) {
+        const { error: fxErr } = await supabase.functions.invoke("admin-invite-member", {
+          body: { tenant_id: tenantId, email: inviteEmail.trim(), role: inviteRole },
+        });
+        if (fxErr) throw fxErr;
+        alert("Invitación enviada.");
+      } else if (rpcError) {
+        throw rpcError;
+      } else {
+        alert("Miembro agregado/actualizado.");
+      }
+
       setInviteEmail("");
-      setInviteRole("viewer");
       await loadMembers();
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message ?? "Error al invitar");
+    } finally {
+      setWorking(false);
     }
-    setWorking(false);
   }
 
   async function handleChangeRole(userId: string, nextRole: TenantRole) {
@@ -120,7 +125,7 @@ export default function TenantMembers() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-semibold">Miembros</h1>
         <Link to={`/t/${slug}/admin`} className="underline">
-          ← Volver al Admin
+          ↜ Volver al Admin
         </Link>
       </div>
 
@@ -134,7 +139,6 @@ export default function TenantMembers() {
           className="w-full border rounded px-3 py-2"
           disabled={!isAdmin || working}
         />
-
         <select
           value={inviteRole}
           onChange={(e) => setInviteRole(e.target.value as TenantRole)}
@@ -145,7 +149,6 @@ export default function TenantMembers() {
           <option value="editor">editor</option>
           <option value="admin">admin</option>
         </select>
-
         <button
           type="submit"
           className="w-full bg-black text-white py-2 rounded disabled:opacity-60"
@@ -154,7 +157,7 @@ export default function TenantMembers() {
           Invitar
         </button>
         <p className="text-xs text-gray-500">
-          El usuario debe existir en Authentication → Users. Si no existe, créalo (o usa sign up).
+          El usuario debe existir en Authentication → Users. Si no existe, se crea automáticamente con la invitación.
         </p>
       </form>
 
@@ -171,11 +174,15 @@ export default function TenantMembers() {
           <tbody>
             {loading ? (
               <tr>
-                <td className="px-4 py-3" colSpan={4}>Cargando…</td>
+                <td className="px-4 py-3" colSpan={4}>
+                  Cargando…
+                </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td className="px-4 py-3" colSpan={4}>No hay miembros todavía.</td>
+                <td className="px-4 py-3" colSpan={4}>
+                  No hay miembros todavía.
+                </td>
               </tr>
             ) : (
               rows.map((m) => (
@@ -189,13 +196,13 @@ export default function TenantMembers() {
                       className="border rounded px-2 py-1"
                     >
                       {ROLES.filter((r) => r !== "none").map((r) => (
-                        <option key={r} value={r}>{r}</option>
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
                       ))}
                     </select>
                   </td>
-                  <td className="px-4 py-2">
-                    {m.joined_at ? new Date(m.joined_at).toLocaleString() : "—"}
-                  </td>
+                  <td className="px-4 py-2">{m.joined_at ? new Date(m.joined_at).toLocaleString() : "—"}</td>
                   <td className="px-4 py-2">
                     <button
                       onClick={() => handleDelete(m.user_id)}

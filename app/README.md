@@ -1,0 +1,1 @@
+- Invite E2E: comprobado curl 200
