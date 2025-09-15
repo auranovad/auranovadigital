@@ -1,7 +1,5 @@
-dist
 node_modules
-_backup*/
-_backup-drop2*/
-
-_backup/
-_backup-drop2/
+dist
+.vite
+coverage
+**/*.d.ts
