@@ -9,7 +9,7 @@ type TenantRole = "admin" | "editor" | "viewer" | "none";
 type MemberRow = {
   user_id: string;
   email: string;
-  role: TenantRole | null;
+  role: TenantRole;
   joined_at: string | null;
 };
 
@@ -17,7 +17,12 @@ const ROLES: TenantRole[] = ["admin", "editor", "viewer", "none"];
 
 export default function TenantMembers() {
   const { slug } = useParams();
-  const { tenantId, role: myRole, loading: roleLoading } = useTenantRole(slug);
+  // Soporta hooks con o sin "loading"
+  const {
+    tenantId,
+    role: myRole,
+    loading: roleLoading = false,
+  } = useTenantRole(slug);
 
   const [rows, setRows] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -25,16 +30,15 @@ export default function TenantMembers() {
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<TenantRole>("viewer");
-
   const [myEmail, setMyEmail] = useState<string>("");
 
   const isAdmin = useMemo(() => myRole === "admin", [myRole]);
 
-  // Obtener mi email (para deshabilitarme cambios a mí mismo en la UI)
+  // Obtiene mi email para deshabilitar acciones sobre mí mismo
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setMyEmail(user?.email ?? "");
+      const { data } = await supabase.auth.getUser();
+      setMyEmail(data.user?.email ?? "");
     })();
   }, []);
 
@@ -49,9 +53,12 @@ export default function TenantMembers() {
       console.error("member_list error", error);
       alert(error.message || "Error listando miembros");
     } else {
-      const mapped = (data as MemberRow[]).map((r) => ({
-        ...r,
+      // Normaliza role (si viene null) para no romper el select
+      const mapped: MemberRow[] = (data as any[]).map((r) => ({
+        user_id: r.user_id,
+        email: r.email,
         role: (r.role as TenantRole) ?? "viewer",
+        joined_at: r.joined_at ?? null,
       }));
       setRows(mapped);
     }
@@ -63,38 +70,50 @@ export default function TenantMembers() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId]);
 
-  // Invitar miembro (1) RPC si ya existe en Auth; (2) Edge Function si no existe
+  // Invitación: 1) RPC si ya existe en Auth; 2) Edge Function si no existe
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
-    if (!tenantId) return;
-    if (!inviteEmail) return;
+    if (!tenantId) return alert("Sin tenant seleccionado.");
+    if (!inviteEmail) return alert("Ingresa un email.");
 
     setWorking(true);
     try {
-      // 1) intenta por RPC (requiere que el usuario exista en Authentication → Users)
+      // 1) intenta por RPC (usuario debe existir en Authentication → Users)
       const rpc = await supabase.rpc("add_member_by_email", {
         p_tenant: tenantId,
         p_email: inviteEmail.trim(),
         p_role: inviteRole,
       });
 
-      if (rpc.error && rpc.error.message.includes("user_not_found")) {
-        // 2) si no existe, usa Edge Function (crea user + membership + email)
-        const { error } = await supabase.functions.invoke("admin-invite-member", {
-          body: { tenant_id: tenantId, email: inviteEmail.trim(), role: inviteRole },
-        });
-        if (error) throw error;
-        alert("Invitación enviada.");
-      } else if (rpc.error) {
-        throw rpc.error;
+      if (rpc.error) {
+        const msg = rpc.error.message || "";
+        // 2) si no existe, invoca la Edge Function (crea user + membership)
+        if (msg.includes("user_not_found")) {
+          const { error: fxErr } = await supabase.functions.invoke(
+            "admin-invite-member",
+            {
+              body: {
+                tenant_id: tenantId,
+                email: inviteEmail.trim(),
+                role: inviteRole,
+              },
+            }
+          );
+          if (fxErr) throw fxErr;
+          alert("Invitación enviada (Edge Function).");
+        } else {
+          throw rpc.error;
+        }
       } else {
-        alert("Miembro agregado/actualizado.");
+        alert("Miembro agregado/actualizado (RPC).");
       }
 
       setInviteEmail("");
+      setInviteRole("viewer");
       await loadMembers();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      console.error("handleInvite error:", err);
       alert(msg || "Error al invitar");
     } finally {
       setWorking(false);
@@ -102,7 +121,7 @@ export default function TenantMembers() {
   }
 
   async function handleChangeRole(userId: string, nextRole: TenantRole) {
-    if (!tenantId) return;
+    if (!tenantId) return alert("Sin tenant seleccionado.");
     if (!isAdmin) return alert("Solo admin puede cambiar roles.");
     if (nextRole === "none") return alert("Rol inválido.");
 
@@ -113,7 +132,6 @@ export default function TenantMembers() {
         p_user: userId,
         p_role: nextRole,
       });
-
       if (error) {
         console.error("set_member_role error", error);
         alert(error.message || "No se pudo cambiar el rol.");
@@ -126,7 +144,7 @@ export default function TenantMembers() {
   }
 
   async function handleDelete(userId: string) {
-    if (!tenantId) return;
+    if (!tenantId) return alert("Sin tenant seleccionado.");
     if (!isAdmin) return alert("Solo admin puede eliminar.");
     if (!confirm("¿Eliminar este miembro?")) return;
 
@@ -136,7 +154,6 @@ export default function TenantMembers() {
         p_tenant: tenantId,
         p_user: userId,
       });
-
       if (error) {
         console.error("remove_member error", error);
         alert(error.message || "No se pudo eliminar el miembro.");
@@ -189,7 +206,7 @@ export default function TenantMembers() {
         </button>
 
         <p className="text-xs text-gray-500">
-          El usuario debe existir en Authentication → Users. Si no existe, se crea automáticamente con la invitación.
+          Si el usuario no existe en Authentication → Users, la invitación lo creará automáticamente.
         </p>
       </form>
 
@@ -207,11 +224,15 @@ export default function TenantMembers() {
           <tbody>
             {loading || roleLoading ? (
               <tr>
-                <td className="px-4 py-3" colSpan={4}>Cargando…</td>
+                <td className="px-4 py-3" colSpan={4}>
+                  Cargando…
+                </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td className="px-4 py-3" colSpan={4}>No hay miembros todavía.</td>
+                <td className="px-4 py-3" colSpan={4}>
+                  No hay miembros todavía.
+                </td>
               </tr>
             ) : (
               rows.map((m) => {
@@ -221,13 +242,17 @@ export default function TenantMembers() {
                     <td className="px-4 py-2">{m.email}</td>
                     <td className="px-4 py-2">
                       <select
-                        value={m.role ?? "viewer"}
-                        onChange={(e) => handleChangeRole(m.user_id, e.target.value as TenantRole)}
+                        value={m.role}
+                        onChange={(e) =>
+                          handleChangeRole(m.user_id, e.target.value as TenantRole)
+                        }
                         disabled={!isAdmin || working || isSelf}
                         className="border rounded px-2 py-1"
                       >
                         {ROLES.filter((r) => r !== "none").map((r) => (
-                          <option key={r} value={r}>{r}</option>
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
                         ))}
                       </select>
                     </td>
