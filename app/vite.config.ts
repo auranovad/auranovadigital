@@ -1,3 +1,4 @@
+import { fileURLToPath, URL } from 'node:url';
 import { loadEnv } from "vite";
 process.env = { ...process.env, ...loadEnv(process.env.NODE_ENV ?? "development", process.cwd(), "") };
 import { defineConfig } from 'vite'
@@ -12,6 +13,7 @@ if (!url)  throw new Error('Missing VITE_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_UR
 if (!anon) throw new Error('Missing VITE_SUPABASE_ANON_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY at build time')
 
 export default defineConfig({
+  test: { environment: 'jsdom', setupFiles: './tests/setup.ts', globals: true, css: true },
   base: '/', // sirve /assets correctamente en prod
   plugins: [react()],
   resolve: {
