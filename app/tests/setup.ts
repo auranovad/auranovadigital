@@ -1,20 +1,14 @@
 import '@testing-library/jest-dom/vitest'
-import { afterEach, vi } from 'vitest'
+import { afterEach } from 'vitest'
 import { cleanup } from '@testing-library/react'
 
+// Mock mínimo de Supabase para que los tests no llamen red
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     auth: {
-      getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
-      onAuthStateChange: vi.fn().mockReturnValue({
-        data: { subscription: { unsubscribe: vi.fn() } }, error: null
-      })
-    },
-    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
-    from: vi.fn().mockReturnValue({
-      select: vi.fn().mockResolvedValue({ data: [], error: null })
-    }),
-    functions: { invoke: vi.fn().mockResolvedValue({ data: null, error: null }) }
+      getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+      onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: () => {} } } })
+    }
   }
 }))
 afterEach(() => cleanup())
