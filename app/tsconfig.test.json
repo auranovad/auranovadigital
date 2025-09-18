@@ -1,7 +1,18 @@
 {
-  "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": ["vitest/globals", "@testing-library/jest-dom"]
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/*"] },
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["vitest/globals", "vite/client", "@testing-library/jest-dom", "node"]
   },
-  "include": ["src", "tests", "vitest.config.ts"]
+  "include": ["src", "tests", "src/vite-env.d.ts"]
 }

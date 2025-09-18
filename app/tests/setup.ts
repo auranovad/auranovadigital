@@ -1,20 +1,20 @@
-import '@testing-library/jest-dom/vitest';
-import { afterEach, vi } from 'vitest';
-import { cleanup } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest'
+import { afterEach, vi } from 'vitest'
+import { cleanup } from '@testing-library/react'
 
-/** Mock global de Supabase para los tests */
-vi.mock('@/lib/supabase', () => {
-  return {
-    supabase: {
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
-      },
-      rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
-      functions: { invoke: vi.fn().mockResolvedValue({ data: {}, error: null }) },
+vi.mock('@/lib/supabase', () => ({
+  supabase: {
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+      onAuthStateChange: vi.fn().mockReturnValue({
+        data: { subscription: { unsubscribe: vi.fn() } }, error: null
+      })
     },
-  };
-});
-
-afterEach(() => {
-  cleanup();
-});
+    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockResolvedValue({ data: [], error: null })
+    }),
+    functions: { invoke: vi.fn().mockResolvedValue({ data: null, error: null }) }
+  }
+}))
+afterEach(() => cleanup())
