@@ -1,4 +1,3 @@
-// src/pages/TenantMembers.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -30,7 +29,7 @@ export default function TenantMembers() {
 
   const isAdmin = useMemo(() => myRole === "admin", [myRole]);
 
-  // Obtener mi email (para deshabilitar acciones sobre mí mismo)
+  // Obtener mi email (para deshabilitarme cambios a mí mismo en la UI)
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -63,7 +62,7 @@ export default function TenantMembers() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId]);
 
-  // === INVITAR: RPC si el user ya existe; FALLBACK con fetch directo a Edge Function ===
+  // Invitar miembro (1) RPC si ya existe en Auth; (2) Function de Vercel (proxy) si no existe
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
     if (!tenantId) return;
@@ -71,7 +70,7 @@ export default function TenantMembers() {
 
     setWorking(true);
     try {
-      // 1) Primero intenta por RPC (rápido si el usuario YA existe en Auth)
+      // 1) intenta por RPC (requiere que el usuario exista en Authentication → Users)
       const rpc = await supabase.rpc("add_member_by_email", {
         p_tenant: tenantId,
         p_email: inviteEmail.trim(),
@@ -90,26 +89,12 @@ export default function TenantMembers() {
         return;
       }
 
-      if (!userNotFound) {
-        // Fue otro error distinto a "user_not_found"
-        throw rpc.error;
-      }
+      if (!userNotFound) throw rpc.error;
 
-      // 2) Fallback robusto: fetch directo a Edge Function (evita rarezas del SDK/CORS)
-      const base = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, "");
-      const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-      if (!base) throw new Error("Falta VITE_SUPABASE_URL en el build.");
-      if (!anon) throw new Error("Falta VITE_SUPABASE_ANON_KEY en el build.");
-
-      const res = await fetch(`${base}/functions/v1/admin-invite-member`, {
-        method: "POST",
-        mode: "cors",
-        credentials: "omit",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": anon,
-          "Authorization": `Bearer ${anon}`,
-        },
+      // 2) Fallback SIN CORS: llama a nuestra Function de Vercel (mismo origen)
+      const res = await fetch('/api/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenant_id: tenantId,
           email: inviteEmail.trim(),
@@ -117,10 +102,8 @@ export default function TenantMembers() {
         }),
       });
 
-      if (!res.ok) {
-        const t = await res.text().catch(() => "");
-        throw new Error(t || `Function failed with ${res.status}`);
-      }
+      const text = await res.text();
+      if (!res.ok) throw new Error(text || `Invite failed with ${res.status}`);
 
       alert("Invitación enviada.");
       setInviteEmail("");
@@ -193,7 +176,6 @@ export default function TenantMembers() {
       {/* Formulario de invitación */}
       <form onSubmit={handleInvite} className="border rounded-lg p-4 space-y-3 mb-6">
         <label className="block text-sm font-medium">Invitar por email</label>
-
         <input
           type="email"
           placeholder="email@ejemplo.com"
@@ -219,12 +201,11 @@ export default function TenantMembers() {
           className="w-full bg-black text-white py-2 rounded disabled:opacity-60"
           disabled={!isAdmin || working}
         >
-          {working ? "Enviando…" : "Invitar"}
+          {working ? "Enviando..." : "Invitar"}
         </button>
 
         <p className="text-xs text-gray-500">
-          Si el email ya existe en <em>Authentication → Users</em>, se le asigna al tenant por RPC.
-          Si no existe, la Edge Function <code>admin-invite-member</code> crea el usuario y envía la invitación.
+          Si el email ya existe en Authentication → Users, se le asigna por RPC. Si no existe, la Function de Vercel crea el usuario y envía la invitación.
         </p>
       </form>
 
@@ -257,7 +238,7 @@ export default function TenantMembers() {
                     <td className="px-4 py-2">
                       <select
                         value={m.role ?? "viewer"}
-                        onChange={(e) => handleChangeRole(m.user_id, e.target.value as TenantRole)}
+                        onChange={(e) => handleChangeRole(m.user_id, (e.target.value as TenantRole))}
                         disabled={!isAdmin || working || isSelf}
                         className="border rounded px-2 py-1"
                       >
