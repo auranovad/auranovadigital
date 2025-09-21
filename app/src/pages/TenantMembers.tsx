@@ -14,11 +14,6 @@ type MemberRow = {
 };
 
 const ROLES: TenantRole[] = ["admin", "editor", "viewer", "none"];
-const INVITE_FUNCTION = "admin-invite-member";
-
-function isValidEmail(v: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
-}
 
 export default function TenantMembers() {
   const { slug } = useParams();
@@ -35,22 +30,20 @@ export default function TenantMembers() {
 
   const isAdmin = useMemo(() => myRole === "admin", [myRole]);
 
-  // Obtener mi email (para deshabilitarme cambios a mí mismo en la UI)
+  // Obtener mi email (para deshabilitar acciones sobre mí mismo)
   useEffect(() => {
     (async () => {
-      try {
-        const { data } = await supabase.auth.getUser();
-        setMyEmail(data.user?.email ?? "");
-      } catch {
-        setMyEmail("");
-      }
+      const { data: { user } } = await supabase.auth.getUser();
+      setMyEmail(user?.email ?? "");
     })();
   }, []);
 
   async function loadMembers() {
     if (!tenantId) return;
     setLoading(true);
-    const { data, error } = await supabase.rpc("member_list", { p_tenant: tenantId });
+    const { data, error } = await supabase.rpc("member_list", {
+      p_tenant: tenantId,
+    });
 
     if (error) {
       console.error("member_list error", error);
@@ -70,42 +63,71 @@ export default function TenantMembers() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId]);
 
-  // Invitar miembro: (1) RPC si ya existe en Auth; (2) Edge Function si no existe
+  // === INVITAR: RPC si el user ya existe; FALLBACK con fetch directo a Edge Function ===
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
-    if (!tenantId) return alert("Falta tenantId.");
-    if (!isAdmin) return alert("Solo admin puede invitar.");
-    if (!inviteEmail || !isValidEmail(inviteEmail)) return alert("Email inválido.");
-    setWorking(true);
+    if (!tenantId) return;
+    if (!inviteEmail) return;
 
+    setWorking(true);
     try {
-      // 1) intenta por RPC (requiere que el usuario exista en Authentication → Users)
+      // 1) Primero intenta por RPC (rápido si el usuario YA existe en Auth)
       const rpc = await supabase.rpc("add_member_by_email", {
         p_tenant: tenantId,
         p_email: inviteEmail.trim(),
         p_role: inviteRole,
       });
 
-      if (rpc.error) {
-        // Si el backend nos indica que no existe el user, vamos por la función Edge
-        if (rpc.error.message?.includes("user_not_found")) {
-          const { error: fxErr } = await supabase.functions.invoke(INVITE_FUNCTION, {
-            body: { tenant_id: tenantId, email: inviteEmail.trim(), role: inviteRole },
-          });
-          if (fxErr) throw fxErr;
-          alert("Invitación enviada (se creó el usuario).");
-        } else {
-          throw rpc.error;
-        }
-      } else {
+      const userNotFound =
+        !!rpc.error &&
+        (rpc.error.message?.includes("user_not_found") ||
+          rpc.error.message?.toLowerCase().includes("not found"));
+
+      if (!rpc.error) {
         alert("Miembro agregado/actualizado (usuario ya existía).");
+        setInviteEmail("");
+        await loadMembers();
+        return;
       }
 
+      if (!userNotFound) {
+        // Fue otro error distinto a "user_not_found"
+        throw rpc.error;
+      }
+
+      // 2) Fallback robusto: fetch directo a Edge Function (evita rarezas del SDK/CORS)
+      const base = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, "");
+      const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+      if (!base) throw new Error("Falta VITE_SUPABASE_URL en el build.");
+      if (!anon) throw new Error("Falta VITE_SUPABASE_ANON_KEY en el build.");
+
+      const res = await fetch(`${base}/functions/v1/admin-invite-member`, {
+        method: "POST",
+        mode: "cors",
+        credentials: "omit",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": anon,
+          "Authorization": `Bearer ${anon}`,
+        },
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          email: inviteEmail.trim(),
+          role: inviteRole,
+        }),
+      });
+
+      if (!res.ok) {
+        const t = await res.text().catch(() => "");
+        throw new Error(t || `Function failed with ${res.status}`);
+      }
+
+      alert("Invitación enviada.");
       setInviteEmail("");
       await loadMembers();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error("handleInvite error:", err);
+      console.error("invite error:", err);
       alert(msg || "Error al invitar");
     } finally {
       setWorking(false);
@@ -116,8 +138,8 @@ export default function TenantMembers() {
     if (!tenantId) return;
     if (!isAdmin) return alert("Solo admin puede cambiar roles.");
     if (nextRole === "none") return alert("Rol inválido.");
-    setWorking(true);
 
+    setWorking(true);
     try {
       const { error } = await supabase.rpc("set_member_role", {
         p_tenant: tenantId,
@@ -140,8 +162,8 @@ export default function TenantMembers() {
     if (!tenantId) return;
     if (!isAdmin) return alert("Solo admin puede eliminar.");
     if (!confirm("¿Eliminar este miembro?")) return;
-    setWorking(true);
 
+    setWorking(true);
     try {
       const { error } = await supabase.rpc("remove_member", {
         p_tenant: tenantId,
@@ -168,52 +190,43 @@ export default function TenantMembers() {
         </Link>
       </div>
 
-      {/* Formulario de invitación (solo admin) */}
-      {isAdmin ? (
-        <form onSubmit={handleInvite} className="border rounded-lg p-4 space-y-3 mb-6">
-          <label className="block text-sm font-medium">Invitar por email</label>
-          <input
-            type="email"
-            placeholder="email@ejemplo.com"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            className="w-full border rounded px-3 py-2"
-            disabled={!tenantId || working}
-            required
-          />
+      {/* Formulario de invitación */}
+      <form onSubmit={handleInvite} className="border rounded-lg p-4 space-y-3 mb-6">
+        <label className="block text-sm font-medium">Invitar por email</label>
 
-          <div className="flex items-center gap-2">
-            <label className="text-sm">Rol:</label>
-            <select
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as TenantRole)}
-              className="border rounded px-3 py-2"
-              disabled={!tenantId || working}
-            >
-              <option value="viewer">viewer</option>
-              <option value="editor">editor</option>
-              <option value="admin">admin</option>
-            </select>
-          </div>
+        <input
+          type="email"
+          placeholder="email@ejemplo.com"
+          value={inviteEmail}
+          onChange={(e) => setInviteEmail(e.target.value)}
+          className="w-full border rounded px-3 py-2"
+          disabled={!isAdmin || working}
+        />
 
-          <button
-            type="submit"
-            className="w-full bg-black text-white py-2 rounded disabled:opacity-60"
-            disabled={!tenantId || working}
-          >
-            {working ? "Enviando…" : "Invitar"}
-          </button>
+        <select
+          value={inviteRole}
+          onChange={(e) => setInviteRole(e.target.value as TenantRole)}
+          className="border rounded px-3 py-2"
+          disabled={!isAdmin || working}
+        >
+          <option value="viewer">viewer</option>
+          <option value="editor">editor</option>
+          <option value="admin">admin</option>
+        </select>
 
-          <p className="text-xs text-gray-500">
-            Si el email ya existe en Authentication → Users, se le asigna al tenant por RPC.
-            Si no existe, la Edge Function <code>{INVITE_FUNCTION}</code> crea el usuario y envía la invitación.
-          </p>
-        </form>
-      ) : (
-        <div className="mb-6 rounded border p-4 bg-gray-50 text-sm">
-          Solo los administradores pueden invitar miembros.
-        </div>
-      )}
+        <button
+          type="submit"
+          className="w-full bg-black text-white py-2 rounded disabled:opacity-60"
+          disabled={!isAdmin || working}
+        >
+          {working ? "Enviando…" : "Invitar"}
+        </button>
+
+        <p className="text-xs text-gray-500">
+          Si el email ya existe en <em>Authentication → Users</em>, se le asigna al tenant por RPC.
+          Si no existe, la Edge Function <code>admin-invite-member</code> crea el usuario y envía la invitación.
+        </p>
+      </form>
 
       {/* Tabla de miembros */}
       <div className="border rounded-lg overflow-hidden">
