@@ -39,9 +39,8 @@ export default async function handler(req: Request): Promise<Response> {
   const uRes = await fetch(`${base}/auth/v1/user`, {
     headers: { 'Authorization': `Bearer ${bearer}`, 'apikey': anon },
   });
-  if (!uRes.ok) {
-    return json({ error: 'Invalid session' }, 401);
-  }
+  if (!uRes.ok) return json({ error: 'Invalid session' }, 401);
+
   const me = await uRes.json();
   const callerId = me?.id as string | undefined;
   if (!callerId) return json({ error: 'Invalid user' }, 401);
@@ -55,9 +54,9 @@ export default async function handler(req: Request): Promise<Response> {
     return json({ error: 'Missing payload: tenant_id, email, role' }, 400);
   }
 
-  // 4) Verificar que el llamante es ADMIN del tenant
+  // 4) Verificar que el llamante es ADMIN del tenant (REST con service role)
   const check = await fetch(
-    `${base}/rest/v1/tenant_members?tenant_id=eq.${tenant_id}&user_id=eq.${callerId}&role=in.(admin)&select=user_id&limit=1`,
+    `${base}/rest/v1/tenant_members?tenant_id=eq.${tenant_id}&user_id=eq.${callerId}&role=eq.admin&select=user_id&limit=1`,
     { headers: { apikey: service, Authorization: `Bearer ${service}` } }
   );
   if (!check.ok) return json({ error: 'membership_check_failed' }, 500);
@@ -66,7 +65,7 @@ export default async function handler(req: Request): Promise<Response> {
     return json({ error: 'forbidden_not_admin' }, 403);
   }
 
-  // 5) Llamar a la Edge Function de Supabase (crea user si no existe + envía email)
+  // 5) Llamar a la Edge Function de Supabase
   try {
     const r = await fetch(`${base}/functions/v1/admin-invite-member`, {
       method: 'POST',
