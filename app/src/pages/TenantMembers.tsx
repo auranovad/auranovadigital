@@ -41,9 +41,7 @@ export default function TenantMembers() {
   async function loadMembers() {
     if (!tenantId) return;
     setLoading(true);
-    const { data, error } = await supabase.rpc("member_list", {
-      p_tenant: tenantId,
-    });
+    const { data, error } = await supabase.rpc("member_list", { p_tenant: tenantId });
 
     if (error) {
       console.error("member_list error", error);
@@ -64,8 +62,8 @@ export default function TenantMembers() {
   }, [tenantId]);
 
   // Invitar miembro:
-  //  1) RPC (si el usuario YA existe en Auth).
-  //  2) Si el RPC dice user_not_found => usar SIEMPRE el proxy /api/invite.
+  // 1) intenta por RPC (si el user YA existe en Auth)
+  // 2) si responde "user_not_found", usa SIEMPRE el proxy /api/invite (con Authorization Bearer)
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
     if (!tenantId) return;
@@ -73,38 +71,53 @@ export default function TenantMembers() {
 
     setWorking(true);
     try {
-      const email = inviteEmail.trim();
-
-      // 1) intenta por RPC (requiere que el usuario exista en Authentication → Users)
+      // (1) RPC directo (si el usuario ya existe en Auth)
       const rpc = await supabase.rpc("add_member_by_email", {
         p_tenant: tenantId,
-        p_email: email,
+        p_email: inviteEmail.trim(),
         p_role: inviteRole,
       });
 
-      const notFound = rpc.error && /user_not_found/i.test(rpc.error.message);
+      if (!rpc.error) {
+        alert("Miembro agregado/actualizado.");
+        setInviteEmail("");
+        await loadMembers();
+        return;
+      }
 
-      if (rpc.error && !notFound) {
+      // Si NO es "user_not_found", entonces es otro error real
+      if (rpc.error && !String(rpc.error.message || "").includes("user_not_found")) {
         throw rpc.error;
       }
 
-      if (notFound || rpc.data === null) {
-        // 2) siempre proxy (evita 404 por dominios de funciones)
-        const res = await fetch("/api/invite", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tenant_id: tenantId, email, role: inviteRole }),
-        });
-
-        const text = await res.text();
-        if (!res.ok) {
-          throw new Error(text || "Edge proxy error");
-        }
-        alert("Invitación enviada.");
-      } else {
-        alert("Miembro agregado/actualizado.");
+      // (2) Fallback: proxy en Vercel usando Service Role (requiere Authorization del caller)
+      const { data: { session } } = await supabase.auth.getSession();
+      const access = session?.access_token;
+      if (!access) {
+        throw new Error("Debes iniciar sesión de nuevo (no hay access_token).");
       }
 
+      const res = await fetch("/api/invite", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${access}`,
+        },
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          email: inviteEmail.trim(),
+          role: inviteRole,
+        }),
+      });
+
+      const text = await res.text();
+      if (!res.ok) {
+        // El proxy devuelve JSON detallado en errores
+        throw new Error(text || `HTTP ${res.status}`);
+      }
+
+      // OK
+      alert("Invitación enviada.");
       setInviteEmail("");
       await loadMembers();
     } catch (err) {
@@ -236,7 +249,7 @@ export default function TenantMembers() {
                     <td className="px-4 py-2">
                       <select
                         value={m.role ?? "viewer"}
-                        onChange={(e) => handleChangeRole(m.user_id, (e.target.value as TenantRole))}
+                        onChange={(e) => handleChangeRole(m.user_id, e.target.value as TenantRole)}
                         disabled={!isAdmin || working || isSelf}
                         className="border rounded px-2 py-1"
                       >
