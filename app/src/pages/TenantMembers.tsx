@@ -1,3 +1,4 @@
+// src/pages/TenantMembers.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -62,7 +63,9 @@ export default function TenantMembers() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId]);
 
-  // Invitar miembro (1) RPC si ya existe en Auth; (2) Function de Vercel (proxy) si no existe
+  // Invitar miembro:
+  //  1) RPC (si el usuario YA existe en Auth).
+  //  2) Si el RPC dice user_not_found => usar SIEMPRE el proxy /api/invite.
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
     if (!tenantId) return;
@@ -70,47 +73,42 @@ export default function TenantMembers() {
 
     setWorking(true);
     try {
+      const email = inviteEmail.trim();
+
       // 1) intenta por RPC (requiere que el usuario exista en Authentication → Users)
       const rpc = await supabase.rpc("add_member_by_email", {
         p_tenant: tenantId,
-        p_email: inviteEmail.trim(),
+        p_email: email,
         p_role: inviteRole,
       });
 
-      const userNotFound =
-        !!rpc.error &&
-        (rpc.error.message?.includes("user_not_found") ||
-          rpc.error.message?.toLowerCase().includes("not found"));
+      const notFound = rpc.error && /user_not_found/i.test(rpc.error.message);
 
-      if (!rpc.error) {
-        alert("Miembro agregado/actualizado (usuario ya existía).");
-        setInviteEmail("");
-        await loadMembers();
-        return;
+      if (rpc.error && !notFound) {
+        throw rpc.error;
       }
 
-      if (!userNotFound) throw rpc.error;
+      if (notFound || rpc.data === null) {
+        // 2) siempre proxy (evita 404 por dominios de funciones)
+        const res = await fetch("/api/invite", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tenant_id: tenantId, email, role: inviteRole }),
+        });
 
-      // 2) Fallback SIN CORS: llama a nuestra Function de Vercel (mismo origen)
-      const res = await fetch('/api/invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenant_id: tenantId,
-          email: inviteEmail.trim(),
-          role: inviteRole,
-        }),
-      });
+        const text = await res.text();
+        if (!res.ok) {
+          throw new Error(text || "Edge proxy error");
+        }
+        alert("Invitación enviada.");
+      } else {
+        alert("Miembro agregado/actualizado.");
+      }
 
-      const text = await res.text();
-      if (!res.ok) throw new Error(text || `Invite failed with ${res.status}`);
-
-      alert("Invitación enviada.");
       setInviteEmail("");
       await loadMembers();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error("invite error:", err);
       alert(msg || "Error al invitar");
     } finally {
       setWorking(false);
@@ -201,7 +199,7 @@ export default function TenantMembers() {
           className="w-full bg-black text-white py-2 rounded disabled:opacity-60"
           disabled={!isAdmin || working}
         >
-          {working ? "Enviando..." : "Invitar"}
+          Invitar
         </button>
 
         <p className="text-xs text-gray-500">

@@ -1,46 +1,55 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+// Edge runtime (sin @vercel/node)
+export const config = { runtime: 'edge' };
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS preflight (por si algún día llamas desde otro origen)
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'content-type': 'application/json', ...corsHeaders },
+  });
+}
+
+export default async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    return res.status(200).end();
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
-
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return json({ error: 'Method not allowed' }, 405);
   }
 
-  // Acepta JSON en string o ya parseado
-  const body = typeof req.body === 'string' ? safeParse(req.body) : (req.body ?? {});
-  const { tenant_id, email, role } = (body ?? {}) as {
-    tenant_id?: string;
-    email?: string;
-    role?: 'admin' | 'editor' | 'viewer';
-  };
+  let payload: { tenant_id?: string; email?: string; role?: 'admin'|'editor'|'viewer' };
+  try { payload = await req.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
 
+  const { tenant_id, email, role } = payload ?? {};
   if (!tenant_id || !email || !role) {
-    return res.status(400).json({ error: 'Missing payload: tenant_id, email, role' });
+    return json({ error: 'Missing payload: tenant_id, email, role' }, 400);
   }
 
-  const baseRaw = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-  const base = baseRaw.replace(/\/$/, '');
+  const baseRaw = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').replace(/\/$/, '');
   const anon = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-
-  if (!base || !anon) {
-    return res.status(500).json({ error: 'Missing Supabase env vars on Vercel' });
+  if (!baseRaw || !anon) {
+    return json({ error: 'Missing Supabase env vars on Vercel' }, 500);
   }
 
-  const slugs = ['admin-invite-member', 'admin-invite-member-'];
+  const fn = 'admin-invite-member';
 
-  try {
-    let lastStatus = 500;
-    let lastText = '';
+  // Dos variantes de dominio:
+  //  - Clásico: https://<ref>.supabase.co/functions/v1/<fn>
+  //  - Nuevo:   https://<ref>.functions.supabase.co/<fn>
+  const variantA = `${baseRaw}/functions/v1/${fn}`;
+  const variantB = `${baseRaw.replace('.supabase.co', '.functions.supabase.co')}/${fn}`;
 
-    for (const slug of slugs) {
-      const url = `${base}/functions/v1/${slug}`;
+  const urls = [variantA, variantB];
+  let lastText = '';
+  let lastStatus = 500;
+
+  for (const url of urls) {
+    try {
       const r = await fetch(url, {
         method: 'POST',
         headers: {
@@ -50,26 +59,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         body: JSON.stringify({ tenant_id, email, role }),
       });
-
       const text = await r.text();
-      // Si NO es 404 "Requested function was not found", devolvemos tal cual
-      const isNotFound = r.status === 404 && /Requested function was not found/i.test(text);
-      if (!isNotFound) {
-        res.setHeader('Content-Type', 'application/json');
-        return res.status(r.status).send(text);
+      // Si no es 404, devolvemos tal cual lo que respondió Supabase.
+      if (r.status !== 404) {
+        return new Response(text, { status: r.status, headers: { 'content-type': 'application/json', ...corsHeaders } });
       }
-
-      lastStatus = r.status;
       lastText = text;
+      lastStatus = r.status;
+    } catch (e: any) {
+      lastText = e?.message ?? 'proxy_error';
+      lastStatus = 500;
     }
-
-    // Si probamos ambos y ambos dieron NOT_FOUND
-    return res.status(lastStatus).send(lastText || JSON.stringify({ error: 'not_found' }));
-  } catch (e: any) {
-    return res.status(500).json({ error: e?.message ?? 'proxy_error' });
   }
-}
 
-function safeParse(s: string) {
-  try { return JSON.parse(s); } catch { return null; }
+  return json({ error: 'not_found_after_variants', detail: lastText, tried: urls }, lastStatus);
 }
