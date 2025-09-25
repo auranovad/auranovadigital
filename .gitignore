@@ -15,3 +15,8 @@ app/_backup*
 # backups
 backups/
 app/_backup*
+.vercel/
+app/.vercel/
+*.bak
+*.bak.*
+app/src/pages/TenantMembers.tsx.bak*
