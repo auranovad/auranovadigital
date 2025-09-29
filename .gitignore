@@ -20,3 +20,4 @@ app/.vercel/
 *.bak
 *.bak.*
 app/src/pages/TenantMembers.tsx.bak*
+.vercel
