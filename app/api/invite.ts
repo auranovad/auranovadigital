@@ -55,10 +55,19 @@ export default async function handler(req: Request): Promise<Response> {
 
     // 5) Llama a la Edge Function (dos variantes por si acaso)
     const ref = getProjectRef(BASE);
-    const variants = [
-      `${BASE}/functions/v1/admin-invite-member`,
-      ref ? `https://${ref}.functions.supabase.co/admin-invite-member` : null,
-    ].filter(Boolean) as string[];
+    const ref = getProjectRef(BASE);
+const names = ["admin-invite-member", "admin-invite-member-"];
+const hosts = [
+  `${BASE}/functions/v1`,
+  ref ? `https://${ref}.functions.supabase.co` : null,
+].filter(Boolean) as string[];
+
+const variants: string[] = [];
+for (const h of hosts) {
+  for (const n of names) {
+    variants.push(`${h}/${n}`);
+  }
+}
 
     let lastText = '';
     for (const url of variants) {
